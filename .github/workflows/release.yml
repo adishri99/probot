@@ -6,6 +6,14 @@ on:
       - next
       - beta
       - "*.x"
+
+# These are recommended by the semantic-release docs: https://github.com/semantic-release/npm#npm-provenance
+permissions:
+  contents: write # to be able to publish a GitHub release
+  issues: write # to be able to comment on released issues
+  pull-requests: write # to be able to comment on released pull requests
+  id-token: write # to enable use of OIDC for npm provenance
+
 jobs:
   release:
     name: release
@@ -16,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: lts/*
           cache: npm
       - name: Install dependencies
         run: npm ci
@@ -26,4 +34,4 @@ jobs:
         run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PROBOTBOT_NPM_TOKEN }}
