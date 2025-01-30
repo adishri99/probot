@@ -17,7 +17,7 @@
 import { pino } from "pino";
 import type { Logger, LoggerOptions } from "pino";
 import { getTransformStream, type Options, type LogLevel } from "@probot/pino";
-import { rebindLog } from "./rebind-log";
+import { rebindLog } from "./rebind-log.js";
 
 export type GetLogOptions = {
   level?: LogLevel;
@@ -33,7 +33,7 @@ export function getLog(options: GetLogOptions = {}): Logger {
     messageKey: logMessageKey || "msg",
   };
   const transform = getTransformStream(getTransformStreamOptions);
-  transform.pipe(pino.destination(1));
+  transform.pipe(pino.destination(1) as unknown as NodeJS.WritableStream);
 
   return rebindLog(pino(pinoOptions, transform));
 }

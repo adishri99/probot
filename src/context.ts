@@ -42,12 +42,14 @@ type RepoResultType<E extends WebhookEvents> = {
   repo: RepoNameType<E>;
 };
 
+const kOctokitRequestHookAdded = Symbol("octokit request hook added");
+
 /**
  * The context of the event that was triggered, including the payload and
  * helpers for extracting information can be passed to GitHub API calls.
  *
  *  ```js
- *  module.exports = app => {
+ *  export default app => {
  *    app.on('push', context => {
  *      context.log.info('Code was pushed to the repo, what should we do with it?');
  *    });
@@ -58,21 +60,36 @@ type RepoResultType<E extends WebhookEvents> = {
  * @property {payload} payload - The webhook event payload
  * @property {log} log - A pino instance
  */
-export class Context<E extends WebhookEvents = WebhookEvents> {
+export class Context<Event extends WebhookEvents = WebhookEvents> {
   public name: WebhookEvents;
   public id: string;
-  public payload: WebhookEvent<E>["payload"];
+  public payload: {
+    [K in Event]: K extends WebhookEvents ? WebhookEvent<K> : never;
+  }[Event]["payload"];
 
   public octokit: ProbotOctokit;
   public log: Logger;
 
-  constructor(event: WebhookEvent<E>, octokit: ProbotOctokit, log: Logger) {
+  constructor(event: WebhookEvent<Event>, octokit: ProbotOctokit, log: Logger) {
     this.name = event.name;
     this.id = event.id;
     this.payload = event.payload;
 
     this.octokit = octokit;
     this.log = log;
+
+    // set `x-github-delivery` header on all requests sent in response to the current
+    // event. This allows GitHub Support to correlate the request with the event.
+    // This is not documented and not considered public API, the header may change.
+    // Once we document this as best practice on https://docs.github.com/en/rest/guides/best-practices-for-integrators
+    // we will make it official
+    if ((octokit as any)[kOctokitRequestHookAdded] !== true) {
+      /* istanbul ignore next */
+      octokit.hook.before("request", (options) => {
+        options.headers["x-github-delivery"] = event.id;
+      });
+      (octokit as any)[kOctokitRequestHookAdded] = true;
+    }
   }
 
   /**
@@ -87,7 +104,7 @@ export class Context<E extends WebhookEvents = WebhookEvents> {
    * @param object - Params to be merged with the repo params.
    *
    */
-  public repo<T>(object?: T): RepoResultType<E> & T {
+  public repo<T>(object?: T): RepoResultType<Event> & T {
     // @ts-expect-error `repository` is not always present in this.payload
     const repo = this.payload.repository;
 
@@ -120,7 +137,7 @@ export class Context<E extends WebhookEvents = WebhookEvents> {
    */
   public issue<T>(
     object?: T,
-  ): RepoResultType<E> & { issue_number: RepoIssueNumberType<E> } & T {
+  ): RepoResultType<Event> & { issue_number: RepoIssueNumberType<Event> } & T {
     return Object.assign(
       {
         issue_number:
@@ -146,7 +163,7 @@ export class Context<E extends WebhookEvents = WebhookEvents> {
    */
   public pullRequest<T>(
     object?: T,
-  ): RepoResultType<E> & { pull_number: RepoIssueNumberType<E> } & T {
+  ): RepoResultType<Event> & { pull_number: RepoIssueNumberType<Event> } & T {
     const payload = this.payload;
     return Object.assign(
       {
